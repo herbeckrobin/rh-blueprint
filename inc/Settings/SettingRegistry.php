@@ -6,7 +6,7 @@ namespace RhBlueprint\Settings;
 
 final class SettingRegistry
 {
-    public const OPTION_GROUP = 'rh_blueprint_settings';
+    public const OPTION_GROUP_PREFIX = 'rh_blueprint_settings_';
     public const OPTION_PREFIX = 'rhbp_settings_';
 
     /** @var array<int, GroupInterface> */
@@ -49,6 +49,11 @@ final class SettingRegistry
         return sprintf('%s[%s]', self::optionName($groupId), $fieldId);
     }
 
+    public static function optionGroupForTab(string $tabId): string
+    {
+        return self::OPTION_GROUP_PREFIX . sanitize_key($tabId);
+    }
+
     public function register(): void
     {
         foreach ($this->groups as $group) {
@@ -57,7 +62,7 @@ final class SettingRegistry
             $page = 'rh-blueprint-' . $group->tab();
 
             register_setting(
-                self::OPTION_GROUP,
+                self::optionGroupForTab($group->tab()),
                 $optionName,
                 [
                     'type' => 'array',

@@ -6,6 +6,11 @@ namespace RhBlueprint;
 
 use RhBlueprint\Admin\BlueprintWidget;
 use RhBlueprint\Admin\DashboardCleanup;
+use RhBlueprint\Admin\DbToolsPage;
+use RhBlueprint\Db\BackupStorage;
+use RhBlueprint\Db\Exporter;
+use RhBlueprint\Db\Importer;
+use RhBlueprint\Db\SearchReplace;
 use RhBlueprint\Frontend\SmoothScrollEnqueue;
 use RhBlueprint\Integrations\WpsHideLoginBridge;
 use RhBlueprint\Settings\SettingRegistry;
@@ -27,6 +32,8 @@ final class Plugin
 
     private WpsHideLoginBridge $wpsHideLoginBridge;
 
+    private DbToolsPage $dbToolsPage;
+
     public static function instance(): self
     {
         return self::$instance ??= new self();
@@ -45,6 +52,14 @@ final class Plugin
         $this->dashboardCleanup = new DashboardCleanup();
         $this->blueprintWidget = new BlueprintWidget();
         $this->wpsHideLoginBridge = new WpsHideLoginBridge();
+
+        $backupStorage = new BackupStorage();
+        $searchReplace = new SearchReplace();
+        $this->dbToolsPage = new DbToolsPage(
+            $backupStorage,
+            new Exporter($backupStorage),
+            new Importer($backupStorage, $searchReplace)
+        );
     }
 
     private function registerHooks(): void
@@ -57,6 +72,7 @@ final class Plugin
         $this->dashboardCleanup->boot();
         $this->blueprintWidget->boot();
         $this->wpsHideLoginBridge->boot();
+        $this->dbToolsPage->boot();
     }
 
     public function onInit(): void

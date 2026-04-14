@@ -76,9 +76,6 @@ final class SettingsPage
         $this->renderToolbar();
         $this->renderTabs($tabs, $activeTab);
 
-        echo '<form action="options.php" method="post" class="rhbp-form">';
-        settings_fields(SettingRegistry::OPTION_GROUP);
-
         foreach ($tabs as $tabId => $tabLabel) {
             $isActive = $tabId === $activeTab;
             printf(
@@ -87,28 +84,58 @@ final class SettingsPage
                 $isActive ? '' : 'hidden'
             );
 
+            /**
+             * Wird ganz oben in einem Tab-Panel ausgefuehrt (vor dem Settings-Form).
+             * Eignet sich fuer Erfolgs-/Fehlermeldungen von admin-post-Handlern.
+             */
+            do_action('rh-blueprint/settings/tab_content_before', $tabId);
+
             $hasGroups = false;
             foreach ($this->registry->groups() as $group) {
                 if ($group->tab() !== $tabId) {
                     continue;
                 }
-
                 $hasGroups = true;
-                do_settings_sections('rh-blueprint-' . $tabId);
+                break;
             }
 
-            if (!$hasGroups) {
-                printf(
-                    '<div class="rhbp-empty">%s</div>',
-                    esc_html__('Noch keine Einstellungen in diesem Bereich.', 'rh-blueprint')
-                );
+            if ($hasGroups) {
+                echo '<form action="' . esc_url(admin_url('options.php')) . '" method="post" class="rhbp-form">';
+                settings_fields(SettingRegistry::optionGroupForTab($tabId));
+                do_settings_sections('rh-blueprint-' . $tabId);
+                submit_button(__('Aenderungen speichern', 'rh-blueprint'));
+                echo '</form>';
+            } else {
+                /**
+                 * Wenn keine Setting-Gruppen existieren, muss mindestens ein tab_content_after-Hook
+                 * eigenen Content liefern, sonst zeigen wir die Empty-State-Meldung.
+                 */
+                ob_start();
+                do_action('rh-blueprint/settings/tab_content_after', $tabId);
+                $customContent = (string) ob_get_clean();
+
+                if (trim($customContent) === '') {
+                    printf(
+                        '<div class="rhbp-empty">%s</div>',
+                        esc_html__('Noch keine Einstellungen in diesem Bereich.', 'rh-blueprint')
+                    );
+                } else {
+                    echo $customContent; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+                }
+
+                echo '</div>';
+                continue;
             }
+
+            /**
+             * Wird innerhalb eines Tab-Panels NACH dem Settings-Form ausgefuehrt.
+             * Ermoeglicht es anderen Modulen eigene Forms / Cards (z.B. DB-Tools) einzuhaengen.
+             */
+            do_action('rh-blueprint/settings/tab_content_after', $tabId);
 
             echo '</div>';
         }
 
-        submit_button(__('Aenderungen speichern', 'rh-blueprint'));
-        echo '</form>';
         echo '</div>';
     }
 
