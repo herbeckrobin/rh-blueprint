@@ -41,11 +41,26 @@ final class SupportGroup implements GroupInterface
                 keywords: ['kontakt', 'agentur', 'entwickler'],
             ),
             new SettingField(
+                id: 'role',
+                type: SettingField::TYPE_TEXT,
+                label: __('Rolle', 'rh-blueprint'),
+                description: __('Funktion oder Position des Ansprechpartners (z.B. "Webentwickler").', 'rh-blueprint'),
+                default: 'Webentwickler',
+                keywords: ['rolle', 'position', 'funktion', 'job'],
+            ),
+            new SettingField(
                 id: 'email',
                 type: SettingField::TYPE_EMAIL,
                 label: __('Support-E-Mail', 'rh-blueprint'),
                 description: __('Adresse fuer Supportanfragen.', 'rh-blueprint'),
                 keywords: ['mail', 'kontakt', 'email'],
+            ),
+            new SettingField(
+                id: 'calendar_url',
+                type: SettingField::TYPE_URL,
+                label: __('Termin-Kalender', 'rh-blueprint'),
+                description: __('Link zu einem Buchungskalender (Cal.com, Calendly, etc.).', 'rh-blueprint'),
+                keywords: ['termin', 'kalender', 'booking', 'cal', 'meeting'],
             ),
             new SettingField(
                 id: 'website',

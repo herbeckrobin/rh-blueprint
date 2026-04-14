@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RhBlueprint;
 
+use RhBlueprint\Frontend\SmoothScrollEnqueue;
 use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
 
@@ -14,6 +15,8 @@ final class Plugin
     private SettingRegistry $settingRegistry;
 
     private SettingsPage $settingsPage;
+
+    private SmoothScrollEnqueue $smoothScrollEnqueue;
 
     public static function instance(): self
     {
@@ -29,6 +32,7 @@ final class Plugin
     {
         $this->settingRegistry = new SettingRegistry();
         $this->settingsPage = new SettingsPage($this->settingRegistry);
+        $this->smoothScrollEnqueue = new SmoothScrollEnqueue();
     }
 
     private function registerHooks(): void
@@ -37,6 +41,7 @@ final class Plugin
 
         $this->settingRegistry->boot();
         $this->settingsPage->boot();
+        $this->smoothScrollEnqueue->boot();
     }
 
     public function onInit(): void

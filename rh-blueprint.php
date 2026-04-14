@@ -33,5 +33,6 @@ if (!is_readable($rhbp_autoload)) {
 }
 
 require_once $rhbp_autoload;
+require_once RHBP_PLUGIN_DIR . 'inc/helpers.php';
 
 RhBlueprint\Plugin::boot();

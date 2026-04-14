@@ -15,6 +15,8 @@ final class SettingRegistry
     /** @var array<string, string> */
     private array $tabs = [];
 
+    private bool $groupsLoaded = false;
+
     public function boot(): void
     {
         add_action('init', [$this, 'loadGroups'], 5);
@@ -125,6 +127,12 @@ final class SettingRegistry
 
     public function loadGroups(): void
     {
+        if ($this->groupsLoaded) {
+            return;
+        }
+
+        $this->groupsLoaded = true;
+
         $files = glob(__DIR__ . '/groups/*.php') ?: [];
 
         foreach ($files as $file) {
