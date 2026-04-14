@@ -1,0 +1,42 @@
+.rhbp-settings .rhbp-search {
+    margin: 1rem 0 0.5rem;
+}
+
+.rhbp-settings .rhbp-search input[type="search"] {
+    width: 100%;
+    max-width: 420px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+.rhbp-settings .rhbp-tabs {
+    margin-top: 0.5rem;
+}
+
+.rhbp-settings.is-searching .rhbp-tabs {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.rhbp-settings .rhbp-tab-panel {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-top: none;
+    padding: 1rem 1.5rem;
+}
+
+.rhbp-settings .rhbp-empty {
+    color: #646970;
+    font-style: italic;
+    margin: 0.5rem 0;
+}
+
+.rhbp-settings .form-table tr[hidden] {
+    display: none !important;
+}
+
+.rhbp-settings .rhbp-no-results {
+    padding: 1rem 1.5rem;
+    color: #646970;
+    font-style: italic;
+}

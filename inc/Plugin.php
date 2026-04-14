@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 namespace RhBlueprint;
 
+use RhBlueprint\Settings\SettingRegistry;
+use RhBlueprint\Settings\SettingsPage;
+
 final class Plugin
 {
     private static ?self $instance = null;
+
+    private SettingRegistry $settingRegistry;
+
+    private SettingsPage $settingsPage;
 
     public static function instance(): self
     {
@@ -20,11 +27,16 @@ final class Plugin
 
     private function __construct()
     {
+        $this->settingRegistry = new SettingRegistry();
+        $this->settingsPage = new SettingsPage($this->settingRegistry);
     }
 
     private function registerHooks(): void
     {
         add_action('init', [$this, 'onInit']);
+
+        $this->settingRegistry->boot();
+        $this->settingsPage->boot();
     }
 
     public function onInit(): void
