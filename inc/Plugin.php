@@ -15,6 +15,8 @@ use RhBlueprint\Frontend\SmoothScrollEnqueue;
 use RhBlueprint\Integrations\WpsHideLoginBridge;
 use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
+use RhBlueprint\Sync\PeerRegistry;
+use RhBlueprint\Sync\SyncPeersPage;
 
 final class Plugin
 {
@@ -33,6 +35,8 @@ final class Plugin
     private WpsHideLoginBridge $wpsHideLoginBridge;
 
     private DbToolsPage $dbToolsPage;
+
+    private SyncPeersPage $syncPeersPage;
 
     public static function instance(): self
     {
@@ -60,6 +64,9 @@ final class Plugin
             new Exporter($backupStorage),
             new Importer($backupStorage, $searchReplace)
         );
+
+        $peerRegistry = new PeerRegistry();
+        $this->syncPeersPage = new SyncPeersPage($peerRegistry);
     }
 
     private function registerHooks(): void
@@ -73,6 +80,7 @@ final class Plugin
         $this->blueprintWidget->boot();
         $this->wpsHideLoginBridge->boot();
         $this->dbToolsPage->boot();
+        $this->syncPeersPage->boot();
     }
 
     public function onInit(): void
