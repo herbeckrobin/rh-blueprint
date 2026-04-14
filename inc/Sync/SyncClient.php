@@ -25,13 +25,29 @@ final class SyncClient
      */
     public function request(Peer $peer, string $method, string $route, ?array $bodyData = null): SyncResponse
     {
-        $method = strtoupper($method);
         $body = $bodyData !== null ? (string) wp_json_encode($bodyData) : '';
+        $contentType = $bodyData !== null ? 'application/json' : null;
+
+        return $this->requestRaw($peer, $method, $route, $body, $contentType);
+    }
+
+    /**
+     * Low-level request mit raw-body. Wird fuer Binary-Uploads (Chunks) genutzt.
+     */
+    public function requestRaw(
+        Peer $peer,
+        string $method,
+        string $route,
+        string $body,
+        ?string $contentType = null,
+        int $timeout = self::DEFAULT_TIMEOUT
+    ): SyncResponse {
+        $method = strtoupper($method);
         $path = HmacAuth::canonicalPath($route);
 
         $headers = $this->auth->buildHeaders($method, $path, $body, $peer);
-        if ($bodyData !== null) {
-            $headers['Content-Type'] = 'application/json';
+        if ($contentType !== null) {
+            $headers['Content-Type'] = $contentType;
         }
 
         $url = untrailingslashit($peer->url) . $path;
@@ -39,7 +55,7 @@ final class SyncClient
         $args = [
             'method' => $method,
             'headers' => $headers,
-            'timeout' => self::DEFAULT_TIMEOUT,
+            'timeout' => $timeout,
             'sslverify' => apply_filters('rh-blueprint/sync/sslverify', true, $peer),
         ];
         if ($body !== '') {

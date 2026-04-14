@@ -18,6 +18,7 @@ use RhBlueprint\Settings\SettingsPage;
 use RhBlueprint\Sync\HmacAuth;
 use RhBlueprint\Sync\PeerRegistry;
 use RhBlueprint\Sync\PullOperation;
+use RhBlueprint\Sync\PushOperation;
 use RhBlueprint\Sync\SyncClient;
 use RhBlueprint\Sync\SyncController;
 use RhBlueprint\Sync\SyncLog;
@@ -78,9 +79,10 @@ final class Plugin
         $syncClient = new SyncClient($hmacAuth);
         $syncLog = new SyncLog();
         $pullOperation = new PullOperation($syncClient, $exporter, $importer, $backupStorage, $syncLog);
+        $pushOperation = new PushOperation($syncClient, $exporter, $syncLog);
 
-        $this->syncPeersPage = new SyncPeersPage($peerRegistry, $pullOperation, $syncLog);
-        $this->syncController = new SyncController($hmacAuth, $backupStorage, $exporter);
+        $this->syncPeersPage = new SyncPeersPage($peerRegistry, $pullOperation, $pushOperation, $syncLog);
+        $this->syncController = new SyncController($hmacAuth, $backupStorage, $exporter, $importer);
 
         $this->updateChecker = new UpdateChecker();
     }

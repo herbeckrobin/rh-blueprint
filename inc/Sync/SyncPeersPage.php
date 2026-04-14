@@ -14,12 +14,15 @@ final class SyncPeersPage
     public const NONCE_REMOVE = 'rhbp_peer_remove';
     public const NONCE_REGEN = 'rhbp_peer_regenerate';
     public const NONCE_PULL = 'rhbp_peer_pull';
+    public const NONCE_PUSH = 'rhbp_peer_push';
     public const NEW_TOKEN_TRANSIENT_PREFIX = 'rhbp_peer_new_token_';
     public const PULL_RESULT_TRANSIENT_PREFIX = 'rhbp_pull_result_';
+    public const PUSH_RESULT_TRANSIENT_PREFIX = 'rhbp_push_result_';
 
     public function __construct(
         private readonly PeerRegistry $registry,
         private readonly PullOperation $pullOperation,
+        private readonly PushOperation $pushOperation,
         private readonly SyncLog $log,
     ) {
     }
@@ -32,6 +35,7 @@ final class SyncPeersPage
         add_action('admin_post_rhbp_peer_remove', [$this, 'handleRemove']);
         add_action('admin_post_rhbp_peer_regenerate', [$this, 'handleRegenerate']);
         add_action('admin_post_rhbp_peer_pull', [$this, 'handlePull']);
+        add_action('admin_post_rhbp_peer_push', [$this, 'handlePush']);
     }
 
     public function renderInlineMessage(string $tabId): void
@@ -55,6 +59,8 @@ final class SyncPeersPage
             'peer_not_found' => ['error', __('Peer nicht gefunden.', 'rh-blueprint')],
             'pull_success' => ['success', __('Pull erfolgreich abgeschlossen.', 'rh-blueprint')],
             'pull_failed' => ['error', __('Pull fehlgeschlagen.', 'rh-blueprint')],
+            'push_success' => ['success', __('Push erfolgreich abgeschlossen.', 'rh-blueprint')],
+            'push_failed' => ['error', __('Push fehlgeschlagen.', 'rh-blueprint')],
         ];
 
         if (!isset($map[$message])) {
@@ -81,6 +87,7 @@ final class SyncPeersPage
 
         $this->renderNewTokenNotice();
         $this->renderPullResultNotice();
+        $this->renderPushResultNotice();
         $this->renderPeerList();
         $this->renderAddForm();
         $this->renderHistory();
@@ -189,6 +196,35 @@ final class SyncPeersPage
         $this->redirect($result->success ? 'pull_success' : 'pull_failed');
     }
 
+    public function handlePush(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) {
+            wp_die(esc_html__('Keine Berechtigung.', 'rh-blueprint'), '', ['response' => 403]);
+        }
+        check_admin_referer(self::NONCE_PUSH);
+
+        $id = isset($_POST['peer_id']) ? sanitize_text_field((string) $_POST['peer_id']) : '';
+        $peer = $id !== '' ? $this->registry->get($id) : null;
+        if ($peer === null) {
+            $this->redirect('peer_not_found');
+        }
+
+        $result = $this->pushOperation->execute($peer);
+
+        set_transient(self::PUSH_RESULT_TRANSIENT_PREFIX . get_current_user_id(), [
+            'peer_id' => $peer->id,
+            'peer_name' => $peer->name,
+            'success' => $result->success,
+            'bytes' => $result->bytes,
+            'chunks' => $result->chunks,
+            'duration_ms' => $result->durationMs,
+            'remote_import_ms' => $result->remoteImportMs,
+            'error' => $result->error,
+        ], 60);
+
+        $this->redirect($result->success ? 'push_success' : 'push_failed');
+    }
+
     private function redirect(string $message): void
     {
         wp_safe_redirect(add_query_arg([
@@ -279,6 +315,74 @@ final class SyncPeersPage
         echo '</div>';
     }
 
+    private function renderPushResultNotice(): void
+    {
+        $transientKey = self::PUSH_RESULT_TRANSIENT_PREFIX . get_current_user_id();
+        $data = get_transient($transientKey);
+
+        if (!is_array($data) || !isset($data['peer_name'])) {
+            return;
+        }
+
+        delete_transient($transientKey);
+
+        $success = !empty($data['success']);
+        $bytes = isset($data['bytes']) ? (int) $data['bytes'] : 0;
+        $chunks = isset($data['chunks']) ? (int) $data['chunks'] : 0;
+        $duration = isset($data['duration_ms']) ? (int) $data['duration_ms'] : 0;
+        $remoteMs = isset($data['remote_import_ms']) && $data['remote_import_ms'] !== null ? (int) $data['remote_import_ms'] : null;
+        $error = isset($data['error']) ? (string) $data['error'] : '';
+
+        $modifier = $success ? 'success' : 'error';
+
+        echo '<div class="rhbp-pull-result rhbp-pull-result--' . esc_attr($modifier) . '">';
+        echo '<div class="rhbp-pull-result__header">';
+        echo '<span class="dashicons dashicons-' . ($success ? 'yes-alt' : 'warning') . '" aria-hidden="true"></span>';
+        echo '<strong>';
+        if ($success) {
+            printf(
+                /* translators: %s: peer name */
+                esc_html__('Push zu "%s" erfolgreich', 'rh-blueprint'),
+                esc_html((string) $data['peer_name'])
+            );
+        } else {
+            printf(
+                /* translators: %s: peer name */
+                esc_html__('Push zu "%s" fehlgeschlagen', 'rh-blueprint'),
+                esc_html((string) $data['peer_name'])
+            );
+        }
+        echo '</strong>';
+        echo '</div>';
+
+        if ($success) {
+            echo '<p>';
+            if ($remoteMs !== null) {
+                printf(
+                    /* translators: 1: bytes, 2: chunks count, 3: total duration, 4: remote import duration */
+                    esc_html__('%1$s in %2$d Chunks hochgeladen — %3$d ms gesamt (davon %4$d ms Remote-Import).', 'rh-blueprint'),
+                    esc_html(size_format($bytes, 2) ?: $bytes . ' B'),
+                    $chunks,
+                    $duration,
+                    $remoteMs
+                );
+            } else {
+                printf(
+                    /* translators: 1: bytes, 2: chunks, 3: duration */
+                    esc_html__('%1$s in %2$d Chunks in %3$d ms hochgeladen.', 'rh-blueprint'),
+                    esc_html(size_format($bytes, 2) ?: $bytes . ' B'),
+                    $chunks,
+                    $duration
+                );
+            }
+            echo '</p>';
+        } else {
+            echo '<p>' . esc_html($error) . '</p>';
+        }
+
+        echo '</div>';
+    }
+
     private function renderPeerList(): void
     {
         $peers = $this->registry->all();
@@ -327,6 +431,15 @@ final class SyncPeersPage
         echo '<input type="hidden" name="peer_id" value="' . esc_attr($peer->id) . '" />';
         echo '<button type="submit" class="button button-primary rhbp-peer-card__pull" onclick="return confirm(\'Jetzt von diesem Peer pullen? Die lokale Datenbank wird ueberschrieben (mit Safety-Backup).\')">';
         echo '<span class="dashicons dashicons-download" aria-hidden="true"></span> ' . esc_html__('Pull', 'rh-blueprint');
+        echo '</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
+        wp_nonce_field(self::NONCE_PUSH);
+        echo '<input type="hidden" name="action" value="rhbp_peer_push" />';
+        echo '<input type="hidden" name="peer_id" value="' . esc_attr($peer->id) . '" />';
+        echo '<button type="submit" class="button rhbp-peer-card__push" onclick="return confirm(\'Jetzt zu diesem Peer pushen? Die Datenbank dort wird ueberschrieben (mit Safety-Backup).\')">';
+        echo '<span class="dashicons dashicons-upload" aria-hidden="true"></span> ' . esc_html__('Push', 'rh-blueprint');
         echo '</button>';
         echo '</form>';
 

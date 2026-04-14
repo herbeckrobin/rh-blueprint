@@ -840,6 +840,28 @@
     color: #fff;
 }
 
+/* Push-Button — Outline-Variante mit Akzent */
+.rhbp-peer-card__actions .rhbp-peer-card__push {
+    border: 1px solid #2271b1;
+    background: #fff;
+    color: #2271b1;
+}
+
+.rhbp-peer-card__actions .rhbp-peer-card__push:hover {
+    background: #f0f6fc;
+    color: #135e96;
+    border-color: #135e96;
+    transform: translateY(-1px);
+}
+
+.rhbp-peer-card__actions .rhbp-peer-card__push .dashicons {
+    color: #2271b1;
+}
+
+.rhbp-peer-card__actions .rhbp-peer-card__push:hover .dashicons {
+    color: #135e96;
+}
+
 /* Pull-Result notice */
 .rhbp-pull-result {
     margin: 0 0 20px;
