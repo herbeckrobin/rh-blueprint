@@ -57,6 +57,7 @@ final class SyncPeersPage
             'peer_invalid_url' => ['error', __('Die URL ist nicht gueltig.', 'rh-blueprint')],
             'peer_name_exists' => ['error', __('Ein Peer mit diesem Namen existiert bereits.', 'rh-blueprint')],
             'peer_not_found' => ['error', __('Peer nicht gefunden.', 'rh-blueprint')],
+            'peer_invalid_pairing' => ['error', __('Pairing-Code ungueltig oder beschaedigt.', 'rh-blueprint')],
             'pull_success' => ['success', __('Pull erfolgreich abgeschlossen.', 'rh-blueprint')],
             'pull_failed' => ['error', __('Pull fehlgeschlagen.', 'rh-blueprint')],
             'push_success' => ['success', __('Push erfolgreich abgeschlossen.', 'rh-blueprint')],
@@ -105,6 +106,23 @@ final class SyncPeersPage
         $name = isset($_POST['peer_name']) ? sanitize_text_field((string) $_POST['peer_name']) : '';
         $url = isset($_POST['peer_url']) ? esc_url_raw((string) $_POST['peer_url']) : '';
         $tokenInput = isset($_POST['peer_token']) ? sanitize_text_field((string) $_POST['peer_token']) : '';
+        $pairingInput = isset($_POST['peer_pairing']) ? trim((string) wp_unslash((string) $_POST['peer_pairing'])) : '';
+
+        $pairing = null;
+        if ($pairingInput !== '') {
+            $pairing = Peer::decodePairingCode($pairingInput);
+            if ($pairing === null) {
+                $this->redirect('peer_invalid_pairing');
+            }
+
+            // Name und URL aus dem Code uebernehmen wenn im Form leer gelassen
+            if ($name === '') {
+                $name = (string) $pairing['name'];
+            }
+            if ($url === '') {
+                $url = esc_url_raw((string) $pairing['url']);
+            }
+        }
 
         if ($name === '' || $url === '') {
             $this->redirect('peer_missing_fields');
@@ -118,7 +136,12 @@ final class SyncPeersPage
             $this->redirect('peer_name_exists');
         }
 
-        $peer = Peer::create($name, $url, $tokenInput !== '' ? $tokenInput : null);
+        $peer = Peer::create(
+            name: $name,
+            url: $url,
+            token: $pairing !== null ? $pairing['token'] : ($tokenInput !== '' ? $tokenInput : null),
+            id: $pairing !== null ? $pairing['id'] : null,
+        );
         $this->registry->add($peer);
 
         set_transient(self::NEW_TOKEN_TRANSIENT_PREFIX . get_current_user_id(), [
@@ -251,13 +274,19 @@ final class SyncPeersPage
             return;
         }
 
+        $pairingCode = $peer->makePairingCode();
+
         echo '<div class="rhbp-sync-token-notice">';
         echo '<div class="rhbp-sync-token-notice__header">';
         echo '<span class="dashicons dashicons-shield" aria-hidden="true"></span>';
-        echo '<strong>' . esc_html__('Neues Token fuer Peer', 'rh-blueprint') . ' „' . esc_html($peer->name) . '"</strong>';
+        echo '<strong>' . esc_html__('Pairing-Code fuer Peer', 'rh-blueprint') . ' „' . esc_html($peer->name) . '"</strong>';
         echo '</div>';
-        echo '<p>' . esc_html__('Kopiere das Token jetzt — es wird nach dem Verlassen dieser Seite nicht mehr im Klartext angezeigt.', 'rh-blueprint') . '</p>';
-        echo '<code class="rhbp-sync-token-notice__token">' . esc_html((string) $data['token']) . '</code>';
+        echo '<p>' . esc_html__('Kopiere diesen Code und fuege ihn auf der Gegenseite im Feld "Pairing-Code" ein. Er enthaelt die UUID + das geteilte Token fuer die HMAC-Authentifizierung. Wird nach dem Verlassen dieser Seite nicht mehr angezeigt.', 'rh-blueprint') . '</p>';
+        echo '<code class="rhbp-sync-token-notice__token">' . esc_html($pairingCode) . '</code>';
+        echo '<details class="rhbp-sync-token-notice__details">';
+        echo '<summary>' . esc_html__('Nur das Rohtoken anzeigen', 'rh-blueprint') . '</summary>';
+        echo '<code>' . esc_html((string) $data['token']) . '</code>';
+        echo '</details>';
         echo '</div>';
     }
 
@@ -523,28 +552,36 @@ final class SyncPeersPage
     {
         echo '<div class="rhbp-sync-add">';
         echo '<h3>' . esc_html__('Neuen Peer hinzufuegen', 'rh-blueprint') . '</h3>';
-        echo '<p class="description">' . esc_html__('Ein Peer ist eine andere WordPress-Site, die das rh-blueprint Plugin aktiv hat. Der Token muss auf beiden Seiten identisch gespeichert sein.', 'rh-blueprint') . '</p>';
+        echo '<p class="description">' . esc_html__('Ein Peer ist eine andere WordPress-Site, die das rh-blueprint Plugin aktiv hat. Beide Seiten muessen die gleiche UUID + Token haben — am einfachsten ueber einen Pairing-Code.', 'rh-blueprint') . '</p>';
 
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="rhbp-sync-add__form">';
         wp_nonce_field(self::NONCE_ADD);
         echo '<input type="hidden" name="action" value="rhbp_peer_add" />';
 
+        echo '<div class="rhbp-sync-add__field rhbp-sync-add__field--full">';
+        echo '<label for="rhbp-peer-pairing">' . esc_html__('Pairing-Code (empfohlen)', 'rh-blueprint') . '</label>';
+        echo '<textarea id="rhbp-peer-pairing" name="peer_pairing" rows="3" placeholder="' . esc_attr__('Pairing-Code von der anderen Site einfuegen — Name und URL werden automatisch uebernommen.', 'rh-blueprint') . '"></textarea>';
+        echo '<p class="description">' . esc_html__('Wurde auf der Gegenseite beim Anlegen des Peers angezeigt. Enthaelt UUID + Token + optional Name und URL.', 'rh-blueprint') . '</p>';
+        echo '</div>';
+
+        echo '<div class="rhbp-sync-add__divider"><span>' . esc_html__('oder manuell', 'rh-blueprint') . '</span></div>';
+
         echo '<div class="rhbp-sync-add__field">';
         echo '<label for="rhbp-peer-name">' . esc_html__('Name', 'rh-blueprint') . '</label>';
-        echo '<input type="text" id="rhbp-peer-name" name="peer_name" placeholder="stage" required />';
+        echo '<input type="text" id="rhbp-peer-name" name="peer_name" placeholder="stage" />';
         echo '<p class="description">' . esc_html__('Kurzer Bezeichner, z.B. "stage" oder "prod".', 'rh-blueprint') . '</p>';
         echo '</div>';
 
         echo '<div class="rhbp-sync-add__field">';
         echo '<label for="rhbp-peer-url">' . esc_html__('URL', 'rh-blueprint') . '</label>';
-        echo '<input type="url" id="rhbp-peer-url" name="peer_url" placeholder="https://stage.example.com" required />';
+        echo '<input type="url" id="rhbp-peer-url" name="peer_url" placeholder="https://stage.example.com" />';
         echo '<p class="description">' . esc_html__('Basis-URL der Ziel-Instanz (ohne trailing slash).', 'rh-blueprint') . '</p>';
         echo '</div>';
 
         echo '<div class="rhbp-sync-add__field">';
         echo '<label for="rhbp-peer-token">' . esc_html__('Token (optional)', 'rh-blueprint') . '</label>';
         echo '<input type="text" id="rhbp-peer-token" name="peer_token" placeholder="' . esc_attr__('Leer lassen fuer automatische Generierung', 'rh-blueprint') . '" />';
-        echo '<p class="description">' . esc_html__('Wenn der Peer schon einen Token hat (z.B. von der Gegenseite), hier einfuegen. Sonst wird ein neuer generiert.', 'rh-blueprint') . '</p>';
+        echo '<p class="description">' . esc_html__('Nur verwenden wenn du KEINEN Pairing-Code hast und das Token manuell matchen willst.', 'rh-blueprint') . '</p>';
         echo '</div>';
 
         echo '<div class="rhbp-sync-add__actions">';

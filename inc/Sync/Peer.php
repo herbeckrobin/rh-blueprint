@@ -19,16 +19,73 @@ final class Peer
     ) {
     }
 
-    public static function create(string $name, string $url, ?string $token = null): self
+    public static function create(string $name, string $url, ?string $token = null, ?string $id = null): self
     {
         return new self(
-            id: wp_generate_uuid4(),
+            id: $id !== null && $id !== '' ? $id : wp_generate_uuid4(),
             name: $name,
             url: untrailingslashit(trim($url)),
             token: $token !== null && $token !== '' ? $token : self::generateToken(),
             lastSync: null,
             createdAt: time(),
         );
+    }
+
+    /**
+     * Erzeugt einen Pairing-Code, den man auf der Gegenseite im Add-Form einfuegen kann.
+     * Enthaelt die UUID + das Token (+ Name/URL als Defaults), base64-kodiert.
+     *
+     * SICHERHEIT: Der Code enthaelt das Token im Klartext. Darf nur ueber sichere Kanaele
+     * weitergegeben werden (1Password, verschluesselte Messenger, direkt am Geraet).
+     */
+    public function makePairingCode(): string
+    {
+        $payload = [
+            'v' => 1,
+            'id' => $this->id,
+            'token' => $this->token,
+            'name' => $this->name,
+            'url' => $this->url,
+        ];
+
+        return base64_encode((string) wp_json_encode($payload));
+    }
+
+    /**
+     * @return array{v: int, id: string, token: string, name: string, url: string}|null
+     */
+    public static function decodePairingCode(string $code): ?array
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $decoded = base64_decode($code, true);
+        if ($decoded === false) {
+            return null;
+        }
+
+        /** @var mixed $data */
+        $data = json_decode($decoded, true);
+        if (!is_array($data)) {
+            return null;
+        }
+
+        $id = isset($data['id']) ? (string) $data['id'] : '';
+        $token = isset($data['token']) ? (string) $data['token'] : '';
+
+        if ($id === '' || $token === '') {
+            return null;
+        }
+
+        return [
+            'v' => isset($data['v']) ? (int) $data['v'] : 1,
+            'id' => $id,
+            'token' => $token,
+            'name' => isset($data['name']) ? (string) $data['name'] : '',
+            'url' => isset($data['url']) ? (string) $data['url'] : '',
+        ];
     }
 
     public static function generateToken(): string
