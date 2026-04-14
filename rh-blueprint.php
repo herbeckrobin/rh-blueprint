@@ -2,11 +2,14 @@
 /**
  * Plugin Name:       RH Blueprint
  * Plugin URI:        https://github.com/herbeckrobin/rh-blueprint
+ * Update URI:        https://github.com/herbeckrobin/rh-blueprint
  * Description:       Wiederverwendbares Blueprint-Plugin von Robin Herbeck. Admin-Features, Peer-to-Peer Sync Network, Blueprint-Theme.
  * Version:           0.0.1
  * Requires at least: 6.5
  * Requires PHP:      8.1
+ * Requires Plugins:  wps-hide-login, limit-login-attempts-reloaded, wp-mail-smtp
  * Author:            Robin Herbeck
+ * Author URI:        https://robinherbeck.de
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       rh-blueprint

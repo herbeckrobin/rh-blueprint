@@ -17,6 +17,7 @@ use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
 use RhBlueprint\Sync\PeerRegistry;
 use RhBlueprint\Sync\SyncPeersPage;
+use RhBlueprint\UpdateChecker;
 
 final class Plugin
 {
@@ -37,6 +38,8 @@ final class Plugin
     private DbToolsPage $dbToolsPage;
 
     private SyncPeersPage $syncPeersPage;
+
+    private UpdateChecker $updateChecker;
 
     public static function instance(): self
     {
@@ -67,6 +70,8 @@ final class Plugin
 
         $peerRegistry = new PeerRegistry();
         $this->syncPeersPage = new SyncPeersPage($peerRegistry);
+
+        $this->updateChecker = new UpdateChecker();
     }
 
     private function registerHooks(): void
@@ -81,6 +86,7 @@ final class Plugin
         $this->wpsHideLoginBridge->boot();
         $this->dbToolsPage->boot();
         $this->syncPeersPage->boot();
+        $this->updateChecker->boot();
     }
 
     public function onInit(): void
