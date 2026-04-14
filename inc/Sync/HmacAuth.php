@@ -54,6 +54,29 @@ final class HmacAuth
     }
 
     /**
+     * Verifiziert einen WP_REST_Request anhand der HMAC-Header.
+     * Geeignet als permission_callback.
+     */
+    public function verifyRestRequest(\WP_REST_Request $request): ?Peer
+    {
+        $method = $request->get_method();
+        $path = self::canonicalPath($request->get_route());
+        $body = (string) $request->get_body();
+
+        $headers = [
+            self::AUTH_HEADER => (string) $request->get_header(self::AUTH_HEADER),
+            self::CONTENT_HASH_HEADER => (string) $request->get_header(self::CONTENT_HASH_HEADER),
+        ];
+
+        return $this->verify($method, $path, $body, $headers);
+    }
+
+    public static function canonicalPath(string $route): string
+    {
+        return '/' . ltrim(rest_get_url_prefix(), '/') . '/' . ltrim($route, '/');
+    }
+
+    /**
      * @param array<string, string> $headers
      */
     public function verify(string $method, string $path, string $body, array $headers): ?Peer

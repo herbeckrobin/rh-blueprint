@@ -15,7 +15,9 @@ use RhBlueprint\Frontend\SmoothScrollEnqueue;
 use RhBlueprint\Integrations\WpsHideLoginBridge;
 use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
+use RhBlueprint\Sync\HmacAuth;
 use RhBlueprint\Sync\PeerRegistry;
+use RhBlueprint\Sync\SyncController;
 use RhBlueprint\Sync\SyncPeersPage;
 use RhBlueprint\UpdateChecker;
 
@@ -38,6 +40,8 @@ final class Plugin
     private DbToolsPage $dbToolsPage;
 
     private SyncPeersPage $syncPeersPage;
+
+    private SyncController $syncController;
 
     private UpdateChecker $updateChecker;
 
@@ -62,14 +66,20 @@ final class Plugin
 
         $backupStorage = new BackupStorage();
         $searchReplace = new SearchReplace();
+        $exporter = new Exporter($backupStorage);
         $this->dbToolsPage = new DbToolsPage(
             $backupStorage,
-            new Exporter($backupStorage),
+            $exporter,
             new Importer($backupStorage, $searchReplace)
         );
 
         $peerRegistry = new PeerRegistry();
         $this->syncPeersPage = new SyncPeersPage($peerRegistry);
+        $this->syncController = new SyncController(
+            new HmacAuth($peerRegistry),
+            $backupStorage,
+            $exporter
+        );
 
         $this->updateChecker = new UpdateChecker();
     }
@@ -86,6 +96,7 @@ final class Plugin
         $this->wpsHideLoginBridge->boot();
         $this->dbToolsPage->boot();
         $this->syncPeersPage->boot();
+        $this->syncController->boot();
         $this->updateChecker->boot();
     }
 
