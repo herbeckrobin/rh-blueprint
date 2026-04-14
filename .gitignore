@@ -1,0 +1,21 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+error_log
+
+# Tool-Caches
+.phpstan-cache/
+.phpunit.result.cache
+.phpcs-cache
+
+# JS Build (blueprint-theme)
+node_modules/
+
+# Hinweis: vendor/ ist bewusst NICHT ignoriert.
+# Shared Hosting hat oft kein Composer — das Plugin muss inklusive Dependencies installierbar sein.

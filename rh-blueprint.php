@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       RH Blueprint
- * Plugin URI:        https://github.com/robinherbeck/rh-blueprint
+ * Plugin URI:        https://github.com/herbeckrobin/rh-blueprint
  * Description:       Wiederverwendbares Blueprint-Plugin von Robin Herbeck. Admin-Features, Peer-to-Peer Sync Network, Blueprint-Theme.
  * Version:           0.0.1
  * Requires at least: 6.5
@@ -12,6 +12,8 @@
  * Text Domain:       rh-blueprint
  */
 
+declare(strict_types=1);
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -19,3 +21,17 @@ if (!defined('ABSPATH')) {
 define('RHBP_VERSION', '0.0.1');
 define('RHBP_PLUGIN_FILE', __FILE__);
 define('RHBP_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('RHBP_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+$rhbp_autoload = RHBP_PLUGIN_DIR . 'vendor/autoload.php';
+
+if (!is_readable($rhbp_autoload)) {
+    add_action('admin_notices', static function (): void {
+        echo '<div class="notice notice-error"><p><strong>RH Blueprint:</strong> Composer-Dependencies fehlen. Bitte <code>composer install</code> im Plugin-Verzeichnis ausfuehren.</p></div>';
+    });
+    return;
+}
+
+require_once $rhbp_autoload;
+
+RhBlueprint\Plugin::boot();
