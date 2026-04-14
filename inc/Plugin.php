@@ -74,12 +74,9 @@ final class Plugin
         );
 
         $peerRegistry = new PeerRegistry();
+        $hmacAuth = new HmacAuth($peerRegistry);
         $this->syncPeersPage = new SyncPeersPage($peerRegistry);
-        $this->syncController = new SyncController(
-            new HmacAuth($peerRegistry),
-            $backupStorage,
-            $exporter
-        );
+        $this->syncController = new SyncController($hmacAuth, $backupStorage, $exporter);
 
         $this->updateChecker = new UpdateChecker();
     }
