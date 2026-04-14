@@ -15,10 +15,11 @@ final class Exporter
     /**
      * Erstellt ein ZIP mit db.sql + manifest.json (+ optional uploads/).
      *
+     * @param array<int, string> $excludedTables Vollstaendige Tabellen-Namen (mit Prefix), die nicht im Dump landen
      * @return string Absoluter Pfad zur ZIP-Datei.
      * @throws \RuntimeException bei Fehlern
      */
-    public function createBackup(bool $includeUploads = false): string
+    public function createBackup(bool $includeUploads = false, array $excludedTables = []): string
     {
         @set_time_limit(0);
         if (function_exists('wp_raise_memory_limit')) {
@@ -28,7 +29,7 @@ final class Exporter
         $this->storage->ensureReady();
 
         $sqlFile = $this->storage->reserveTempFile('db');
-        $this->writeSqlDump($sqlFile);
+        $this->writeSqlDump($sqlFile, $excludedTables);
 
         $manifest = $this->buildManifest($sqlFile, $includeUploads);
         $manifestFile = $this->storage->reserveTempFile('manifest');
@@ -45,7 +46,10 @@ final class Exporter
         return $zipPath;
     }
 
-    private function writeSqlDump(string $targetFile): void
+    /**
+     * @param array<int, string> $excludedTables
+     */
+    private function writeSqlDump(string $targetFile, array $excludedTables = []): void
     {
         global $wpdb;
 
@@ -54,11 +58,14 @@ final class Exporter
             throw new \RuntimeException('Konnte SQL-Dump-Datei nicht oeffnen.');
         }
 
+        $excludedMap = array_flip(array_map('strval', $excludedTables));
+
         $header = sprintf(
-            "-- RH Blueprint DB Export\n-- Date: %s\n-- Site: %s\n-- Prefix: %s\n\nSET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n",
+            "-- RH Blueprint DB Export\n-- Date: %s\n-- Site: %s\n-- Prefix: %s\n-- Excluded tables: %s\n\nSET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n",
             gmdate('c'),
             (string) get_site_url(),
-            $wpdb->prefix
+            $wpdb->prefix,
+            $excludedTables === [] ? '(none)' : implode(', ', $excludedTables)
         );
         fwrite($handle, $header);
 
@@ -70,7 +77,12 @@ final class Exporter
         );
 
         foreach ($tables as $table) {
-            $this->dumpTable($handle, (string) $table);
+            $name = (string) $table;
+            if (isset($excludedMap[$name])) {
+                fwrite($handle, sprintf("-- Skipped (excluded): %s\n\n", $name));
+                continue;
+            }
+            $this->dumpTable($handle, $name);
         }
 
         fwrite($handle, "\nSET FOREIGN_KEY_CHECKS=1;\n");

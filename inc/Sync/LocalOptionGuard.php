@@ -28,11 +28,19 @@ final class LocalOptionGuard
 {
     /** @var array<int, string> */
     private const DEFAULT_PATTERNS = [
+        // Plugin-eigene Options + deren Transients
         'rhbp\\_%',
         '\\_transient\\_rhbp\\_%',
         '\\_site\\_transient\\_rhbp\\_%',
         '\\_transient\\_timeout\\_rhbp\\_%',
         '\\_site\\_transient\\_timeout\\_rhbp\\_%',
+        // WP-Core Update-Check Transients (pro Site zeitkritisch)
+        '\\_site\\_transient\\_update\\_%',
+        '\\_site\\_transient\\_timeout\\_update\\_%',
+        // Limit Login Attempts Reloaded — Lockouts und Blacklist sind site-lokal
+        'limit\\_login\\_%',
+        // WP Mail SMTP — Credentials, Auth-Tokens, Lizenz
+        'wp\\_mail\\_smtp%',
     ];
 
     /** @var array<int, string> */
@@ -40,12 +48,26 @@ final class LocalOptionGuard
         // WP Core — Site-Identitaet
         'siteurl',
         'home',
+        'admin_email',
+        'new_admin_email',
         // Plugin-Aktivierung (Fatal-Error-Schutz)
         'active_plugins',
         'active_sitewide_plugins',
         // Cron + Rewrite pro Site
         'cron',
         'rewrite_rules',
+        // Hosting-Pfade fuer Uploads
+        'upload_path',
+        'upload_url_path',
+        // WP-Core SMTP-Fallback
+        'mailserver_url',
+        'mailserver_login',
+        'mailserver_pass',
+        'mailserver_port',
+        // DB-Schema-State
+        'db_version',
+        'db_upgraded',
+        'fresh_site',
         // WPS Hide Login — Login-URL-Slug
         'whl_page',
     ];

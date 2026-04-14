@@ -133,7 +133,7 @@ final class PullOperation
 
     private function createSafetyBackup(): string
     {
-        return $this->exporter->createBackup(false);
+        return $this->exporter->createBackup(false, SyncDefaults::excludedTables());
     }
 
     private function runImport(string $zipPath, string $safetyBackup): void

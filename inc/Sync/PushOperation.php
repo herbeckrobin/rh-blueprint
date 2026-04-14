@@ -33,7 +33,7 @@ final class PushOperation
         $localZip = null;
 
         try {
-            $localZip = $this->exporter->createBackup(false);
+            $localZip = $this->exporter->createBackup(false, SyncDefaults::excludedTables());
             $totalSize = (int) filesize($localZip);
 
             $sessionId = $this->initSession($peer);

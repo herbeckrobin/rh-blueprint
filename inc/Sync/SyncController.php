@@ -153,7 +153,7 @@ final class SyncController
         $includeUploads = (bool) $request->get_param('include_uploads');
 
         try {
-            $zipPath = $this->exporter->createBackup($includeUploads);
+            $zipPath = $this->exporter->createBackup($includeUploads, SyncDefaults::excludedTables());
         } catch (\Throwable $e) {
             return new WP_Error(
                 'rhbp_export_failed',
@@ -278,10 +278,10 @@ final class SyncController
         $totalBytes = (int) filesize($assembledZip);
         $startTime = microtime(true);
 
-        // Auto-Safety-Backup vor dem Import
+        // Auto-Safety-Backup vor dem Import (mit gleichen Excluded-Tables wie Sync-Export)
         $safetyBackup = null;
         try {
-            $safetyBackup = $this->exporter->createBackup(false);
+            $safetyBackup = $this->exporter->createBackup(false, SyncDefaults::excludedTables());
         } catch (\Throwable $e) {
             $this->cleanupSession($sessionId, $session);
             return new WP_Error('rhbp_safety_backup_failed', 'Safety-Backup fehlgeschlagen: ' . $e->getMessage(), ['status' => 500]);
