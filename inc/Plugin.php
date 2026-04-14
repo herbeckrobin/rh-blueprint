@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace RhBlueprint;
 
+use RhBlueprint\Admin\BlueprintWidget;
+use RhBlueprint\Admin\DashboardCleanup;
 use RhBlueprint\Frontend\SmoothScrollEnqueue;
+use RhBlueprint\Integrations\WpsHideLoginBridge;
 use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
 
@@ -17,6 +20,12 @@ final class Plugin
     private SettingsPage $settingsPage;
 
     private SmoothScrollEnqueue $smoothScrollEnqueue;
+
+    private DashboardCleanup $dashboardCleanup;
+
+    private BlueprintWidget $blueprintWidget;
+
+    private WpsHideLoginBridge $wpsHideLoginBridge;
 
     public static function instance(): self
     {
@@ -33,6 +42,9 @@ final class Plugin
         $this->settingRegistry = new SettingRegistry();
         $this->settingsPage = new SettingsPage($this->settingRegistry);
         $this->smoothScrollEnqueue = new SmoothScrollEnqueue();
+        $this->dashboardCleanup = new DashboardCleanup();
+        $this->blueprintWidget = new BlueprintWidget();
+        $this->wpsHideLoginBridge = new WpsHideLoginBridge();
     }
 
     private function registerHooks(): void
@@ -42,6 +54,9 @@ final class Plugin
         $this->settingRegistry->boot();
         $this->settingsPage->boot();
         $this->smoothScrollEnqueue->boot();
+        $this->dashboardCleanup->boot();
+        $this->blueprintWidget->boot();
+        $this->wpsHideLoginBridge->boot();
     }
 
     public function onInit(): void

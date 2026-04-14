@@ -43,7 +43,7 @@ final class SettingsPage
         wp_enqueue_style(
             'rh-blueprint-settings',
             $assetsUrl . 'settings.css',
-            [],
+            ['dashicons'],
             file_exists($assetsDir . 'settings.css') ? (string) filemtime($assetsDir . 'settings.css') : RHBP_VERSION
         );
 
@@ -72,29 +72,9 @@ final class SettingsPage
         echo '<div class="wrap rhbp-settings" data-active-tab="' . esc_attr($activeTab) . '">';
         echo '<h1>' . esc_html__('RH Blueprint', 'rh-blueprint') . '</h1>';
 
-        echo '<div class="rhbp-search">';
-        printf(
-            '<input type="search" id="rhbp-search-input" placeholder="%s" autocomplete="off" />',
-            esc_attr__('Einstellungen durchsuchen…', 'rh-blueprint')
-        );
-        echo '</div>';
-
-        echo '<nav class="nav-tab-wrapper rhbp-tabs">';
-        foreach ($tabs as $tabId => $tabLabel) {
-            $url = add_query_arg([
-                'page' => self::MENU_SLUG,
-                'tab' => $tabId,
-            ], admin_url('options-general.php'));
-
-            printf(
-                '<a href="%1$s" class="nav-tab %2$s" data-tab="%3$s">%4$s</a>',
-                esc_url($url),
-                $tabId === $activeTab ? 'nav-tab-active' : '',
-                esc_attr($tabId),
-                esc_html($tabLabel)
-            );
-        }
-        echo '</nav>';
+        $this->renderHeader();
+        $this->renderToolbar();
+        $this->renderTabs($tabs, $activeTab);
 
         echo '<form action="options.php" method="post" class="rhbp-form">';
         settings_fields(SettingRegistry::OPTION_GROUP);
@@ -119,7 +99,7 @@ final class SettingsPage
 
             if (!$hasGroups) {
                 printf(
-                    '<p class="rhbp-empty">%s</p>',
+                    '<div class="rhbp-empty">%s</div>',
                     esc_html__('Noch keine Einstellungen in diesem Bereich.', 'rh-blueprint')
                 );
             }
@@ -127,8 +107,60 @@ final class SettingsPage
             echo '</div>';
         }
 
-        submit_button();
+        submit_button(__('Aenderungen speichern', 'rh-blueprint'));
         echo '</form>';
         echo '</div>';
+    }
+
+    private function renderHeader(): void
+    {
+        echo '<div class="rhbp-settings__header">';
+        echo '<div class="rhbp-settings__logo" aria-hidden="true">';
+        echo '<span class="dashicons dashicons-layout"></span>';
+        echo '</div>';
+        echo '<div class="rhbp-settings__title">';
+        echo '<h1>' . esc_html__('RH Blueprint', 'rh-blueprint') . '</h1>';
+        echo '<p>' . esc_html__('Zentrale Steuerung fuer Admin-Features, Support-Informationen und Sync Network.', 'rh-blueprint') . '</p>';
+        echo '</div>';
+        printf(
+            '<span class="rhbp-settings__version">v%s</span>',
+            esc_html(RHBP_VERSION)
+        );
+        echo '</div>';
+    }
+
+    private function renderToolbar(): void
+    {
+        echo '<div class="rhbp-settings__toolbar">';
+        echo '<div class="rhbp-search">';
+        printf(
+            '<input type="search" id="rhbp-search-input" placeholder="%s" autocomplete="off" />',
+            esc_attr__('Einstellungen durchsuchen…', 'rh-blueprint')
+        );
+        echo '</div>';
+        echo '</div>';
+    }
+
+    /**
+     * @param array<string, string> $tabs
+     */
+    private function renderTabs(array $tabs, string $activeTab): void
+    {
+        echo '<nav class="rhbp-tabs" aria-label="' . esc_attr__('Einstellungs-Kategorien', 'rh-blueprint') . '">';
+        foreach ($tabs as $tabId => $tabLabel) {
+            $url = add_query_arg([
+                'page' => self::MENU_SLUG,
+                'tab' => $tabId,
+            ], admin_url('options-general.php'));
+
+            printf(
+                '<a href="%1$s" class="nav-tab %2$s" data-tab="%3$s">%4$s</a>',
+                esc_url($url),
+                $tabId === $activeTab ? 'nav-tab-active' : '',
+                esc_attr($tabId),
+                esc_html($tabLabel)
+            );
+        }
+        echo '</nav>';
     }
 }
