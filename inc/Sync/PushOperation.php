@@ -84,7 +84,11 @@ final class PushOperation
 
         $data = $response->json();
         if (!is_array($data) || !isset($data['session_id']) || !is_string($data['session_id'])) {
-            throw new \RuntimeException('Init-Response unvollstaendig (kein session_id).');
+            throw new \RuntimeException(sprintf(
+                'Init-Response unvollstaendig (kein session_id). HTTP %d, Body-Preview: %s',
+                $response->status,
+                $this->previewBody($response->body)
+            ));
         }
 
         return $data['session_id'];
@@ -158,7 +162,16 @@ final class PushOperation
         if (is_array($data) && isset($data['message']) && is_string($data['message'])) {
             return $data['message'];
         }
-        return 'Unbekannter Fehler.';
+        return 'Unbekannter Fehler. Body-Preview: ' . $this->previewBody($response->body);
+    }
+
+    private function previewBody(string $body): string
+    {
+        $stripped = trim(preg_replace('/\s+/', ' ', $body) ?? $body);
+        if (strlen($stripped) > 200) {
+            return substr($stripped, 0, 200) . '…';
+        }
+        return $stripped;
     }
 }
 

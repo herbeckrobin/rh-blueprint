@@ -165,7 +165,11 @@ final class PullOperation
         if (is_array($data) && isset($data['message']) && is_string($data['message'])) {
             return $data['message'];
         }
-        return 'Unbekannter Fehler.';
+        $stripped = trim(preg_replace('/\s+/', ' ', $response->body) ?? $response->body);
+        if (strlen($stripped) > 200) {
+            $stripped = substr($stripped, 0, 200) . '…';
+        }
+        return 'Unbekannter Fehler. Body-Preview: ' . $stripped;
     }
 }
 
