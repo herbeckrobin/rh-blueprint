@@ -13,10 +13,15 @@ final class SyncPeersPage
     public const NONCE_ADD = 'rhbp_peer_add';
     public const NONCE_REMOVE = 'rhbp_peer_remove';
     public const NONCE_REGEN = 'rhbp_peer_regenerate';
+    public const NONCE_PULL = 'rhbp_peer_pull';
     public const NEW_TOKEN_TRANSIENT_PREFIX = 'rhbp_peer_new_token_';
+    public const PULL_RESULT_TRANSIENT_PREFIX = 'rhbp_pull_result_';
 
-    public function __construct(private readonly PeerRegistry $registry)
-    {
+    public function __construct(
+        private readonly PeerRegistry $registry,
+        private readonly PullOperation $pullOperation,
+        private readonly SyncLog $log,
+    ) {
     }
 
     public function boot(): void
@@ -26,6 +31,7 @@ final class SyncPeersPage
         add_action('admin_post_rhbp_peer_add', [$this, 'handleAdd']);
         add_action('admin_post_rhbp_peer_remove', [$this, 'handleRemove']);
         add_action('admin_post_rhbp_peer_regenerate', [$this, 'handleRegenerate']);
+        add_action('admin_post_rhbp_peer_pull', [$this, 'handlePull']);
     }
 
     public function renderInlineMessage(string $tabId): void
@@ -47,6 +53,8 @@ final class SyncPeersPage
             'peer_invalid_url' => ['error', __('Die URL ist nicht gueltig.', 'rh-blueprint')],
             'peer_name_exists' => ['error', __('Ein Peer mit diesem Namen existiert bereits.', 'rh-blueprint')],
             'peer_not_found' => ['error', __('Peer nicht gefunden.', 'rh-blueprint')],
+            'pull_success' => ['success', __('Pull erfolgreich abgeschlossen.', 'rh-blueprint')],
+            'pull_failed' => ['error', __('Pull fehlgeschlagen.', 'rh-blueprint')],
         ];
 
         if (!isset($map[$message])) {
@@ -72,8 +80,10 @@ final class SyncPeersPage
         echo '<p class="rhbp-sync__intro">' . esc_html__('Peers sind andere WordPress-Instanzen, mit denen diese Site Datenbank und Uploads synchronisieren kann. Jeder Peer hat einen eigenen Token als geteiltes Geheimnis fuer HMAC-Authentifizierung.', 'rh-blueprint') . '</p>';
 
         $this->renderNewTokenNotice();
+        $this->renderPullResultNotice();
         $this->renderPeerList();
         $this->renderAddForm();
+        $this->renderHistory();
 
         echo '</div>';
     }
@@ -152,6 +162,33 @@ final class SyncPeersPage
         $this->redirect('peer_regenerated');
     }
 
+    public function handlePull(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) {
+            wp_die(esc_html__('Keine Berechtigung.', 'rh-blueprint'), '', ['response' => 403]);
+        }
+        check_admin_referer(self::NONCE_PULL);
+
+        $id = isset($_POST['peer_id']) ? sanitize_text_field((string) $_POST['peer_id']) : '';
+        $peer = $id !== '' ? $this->registry->get($id) : null;
+        if ($peer === null) {
+            $this->redirect('peer_not_found');
+        }
+
+        $result = $this->pullOperation->execute($peer);
+
+        set_transient(self::PULL_RESULT_TRANSIENT_PREFIX . get_current_user_id(), [
+            'peer_id' => $peer->id,
+            'peer_name' => $peer->name,
+            'success' => $result->success,
+            'bytes' => $result->bytes,
+            'duration_ms' => $result->durationMs,
+            'error' => $result->error,
+        ], 60);
+
+        $this->redirect($result->success ? 'pull_success' : 'pull_failed');
+    }
+
     private function redirect(string $message): void
     {
         wp_safe_redirect(add_query_arg([
@@ -185,6 +222,60 @@ final class SyncPeersPage
         echo '</div>';
         echo '<p>' . esc_html__('Kopiere das Token jetzt — es wird nach dem Verlassen dieser Seite nicht mehr im Klartext angezeigt.', 'rh-blueprint') . '</p>';
         echo '<code class="rhbp-sync-token-notice__token">' . esc_html((string) $data['token']) . '</code>';
+        echo '</div>';
+    }
+
+    private function renderPullResultNotice(): void
+    {
+        $transientKey = self::PULL_RESULT_TRANSIENT_PREFIX . get_current_user_id();
+        $data = get_transient($transientKey);
+
+        if (!is_array($data) || !isset($data['peer_name'])) {
+            return;
+        }
+
+        delete_transient($transientKey);
+
+        $success = !empty($data['success']);
+        $bytes = isset($data['bytes']) ? (int) $data['bytes'] : 0;
+        $duration = isset($data['duration_ms']) ? (int) $data['duration_ms'] : 0;
+        $error = isset($data['error']) ? (string) $data['error'] : '';
+
+        $modifier = $success ? 'success' : 'error';
+
+        echo '<div class="rhbp-pull-result rhbp-pull-result--' . esc_attr($modifier) . '">';
+        echo '<div class="rhbp-pull-result__header">';
+        echo '<span class="dashicons dashicons-' . ($success ? 'yes-alt' : 'warning') . '" aria-hidden="true"></span>';
+        echo '<strong>';
+        if ($success) {
+            printf(
+                /* translators: %s: peer name */
+                esc_html__('Pull von "%s" erfolgreich', 'rh-blueprint'),
+                esc_html((string) $data['peer_name'])
+            );
+        } else {
+            printf(
+                /* translators: %s: peer name */
+                esc_html__('Pull von "%s" fehlgeschlagen', 'rh-blueprint'),
+                esc_html((string) $data['peer_name'])
+            );
+        }
+        echo '</strong>';
+        echo '</div>';
+
+        if ($success) {
+            echo '<p>';
+            printf(
+                /* translators: 1: bytes, 2: duration ms */
+                esc_html__('%1$s in %2$d ms gezogen und importiert.', 'rh-blueprint'),
+                esc_html(size_format($bytes, 2) ?: $bytes . ' B'),
+                $duration
+            );
+            echo '</p>';
+        } else {
+            echo '<p>' . esc_html($error) . '</p>';
+        }
+
         echo '</div>';
     }
 
@@ -231,6 +322,15 @@ final class SyncPeersPage
         echo '<div class="rhbp-peer-card__actions">';
 
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
+        wp_nonce_field(self::NONCE_PULL);
+        echo '<input type="hidden" name="action" value="rhbp_peer_pull" />';
+        echo '<input type="hidden" name="peer_id" value="' . esc_attr($peer->id) . '" />';
+        echo '<button type="submit" class="button button-primary rhbp-peer-card__pull" onclick="return confirm(\'Jetzt von diesem Peer pullen? Die lokale Datenbank wird ueberschrieben (mit Safety-Backup).\')">';
+        echo '<span class="dashicons dashicons-download" aria-hidden="true"></span> ' . esc_html__('Pull', 'rh-blueprint');
+        echo '</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
         wp_nonce_field(self::NONCE_REGEN);
         echo '<input type="hidden" name="action" value="rhbp_peer_regenerate" />';
         echo '<input type="hidden" name="peer_id" value="' . esc_attr($peer->id) . '" />';
@@ -249,6 +349,60 @@ final class SyncPeersPage
         echo '</form>';
 
         echo '</div>';
+        echo '</div>';
+    }
+
+    private function renderHistory(): void
+    {
+        $entries = $this->log->all();
+
+        if ($entries === []) {
+            return;
+        }
+
+        $limit = 20;
+        $entries = array_slice($entries, 0, $limit);
+
+        echo '<div class="rhbp-sync-history">';
+        echo '<h3><span class="dashicons dashicons-backup" aria-hidden="true"></span> ' . esc_html__('Verlauf', 'rh-blueprint') . '</h3>';
+        echo '<table class="rhbp-db-table rhbp-history-table">';
+        echo '<thead><tr>';
+        echo '<th>' . esc_html__('Zeit', 'rh-blueprint') . '</th>';
+        echo '<th>' . esc_html__('Peer', 'rh-blueprint') . '</th>';
+        echo '<th>' . esc_html__('Richtung', 'rh-blueprint') . '</th>';
+        echo '<th>' . esc_html__('Status', 'rh-blueprint') . '</th>';
+        echo '<th>' . esc_html__('Groesse', 'rh-blueprint') . '</th>';
+        echo '<th>' . esc_html__('Dauer', 'rh-blueprint') . '</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($entries as $entry) {
+            $timestamp = isset($entry['timestamp']) ? (int) $entry['timestamp'] : 0;
+            $peerName = isset($entry['peer_name']) ? (string) $entry['peer_name'] : '—';
+            $direction = isset($entry['direction']) ? (string) $entry['direction'] : '';
+            $status = isset($entry['status']) ? (string) $entry['status'] : '';
+            $bytes = isset($entry['bytes']) ? (int) $entry['bytes'] : 0;
+            $durationMs = isset($entry['duration_ms']) ? (int) $entry['duration_ms'] : 0;
+            $error = isset($entry['error']) ? (string) $entry['error'] : '';
+
+            $statusClass = $status === 'success' ? 'ok' : 'fail';
+
+            echo '<tr>';
+            echo '<td>' . esc_html(wp_date('Y-m-d H:i', $timestamp)) . '</td>';
+            echo '<td><strong>' . esc_html($peerName) . '</strong></td>';
+            echo '<td><span class="rhbp-history-direction">' . esc_html($direction) . '</span></td>';
+            echo '<td><span class="rhbp-history-status rhbp-history-status--' . esc_attr($statusClass) . '">' . esc_html($status) . '</span></td>';
+            echo '<td>' . esc_html($bytes > 0 ? (size_format($bytes, 2) ?: $bytes . ' B') : '—') . '</td>';
+            echo '<td>' . esc_html($durationMs > 0 ? $durationMs . ' ms' : '—') . '</td>';
+            echo '</tr>';
+
+            if ($error !== '') {
+                echo '<tr class="rhbp-history-error-row">';
+                echo '<td colspan="6"><code>' . esc_html($error) . '</code></td>';
+                echo '</tr>';
+            }
+        }
+
+        echo '</tbody></table>';
         echo '</div>';
     }
 

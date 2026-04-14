@@ -17,7 +17,10 @@ use RhBlueprint\Settings\SettingRegistry;
 use RhBlueprint\Settings\SettingsPage;
 use RhBlueprint\Sync\HmacAuth;
 use RhBlueprint\Sync\PeerRegistry;
+use RhBlueprint\Sync\PullOperation;
+use RhBlueprint\Sync\SyncClient;
 use RhBlueprint\Sync\SyncController;
+use RhBlueprint\Sync\SyncLog;
 use RhBlueprint\Sync\SyncPeersPage;
 use RhBlueprint\UpdateChecker;
 
@@ -67,15 +70,16 @@ final class Plugin
         $backupStorage = new BackupStorage();
         $searchReplace = new SearchReplace();
         $exporter = new Exporter($backupStorage);
-        $this->dbToolsPage = new DbToolsPage(
-            $backupStorage,
-            $exporter,
-            new Importer($backupStorage, $searchReplace)
-        );
+        $importer = new Importer($backupStorage, $searchReplace);
+        $this->dbToolsPage = new DbToolsPage($backupStorage, $exporter, $importer);
 
         $peerRegistry = new PeerRegistry();
         $hmacAuth = new HmacAuth($peerRegistry);
-        $this->syncPeersPage = new SyncPeersPage($peerRegistry);
+        $syncClient = new SyncClient($hmacAuth);
+        $syncLog = new SyncLog();
+        $pullOperation = new PullOperation($syncClient, $exporter, $importer, $backupStorage, $syncLog);
+
+        $this->syncPeersPage = new SyncPeersPage($peerRegistry, $pullOperation, $syncLog);
         $this->syncController = new SyncController($hmacAuth, $backupStorage, $exporter);
 
         $this->updateChecker = new UpdateChecker();
