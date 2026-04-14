@@ -138,6 +138,9 @@ final class PullOperation
 
     private function runImport(string $zipPath, string $safetyBackup): void
     {
+        $guard = new LocalOptionGuard();
+        $snapshot = $guard->snapshot();
+
         try {
             $this->importer->importFromFile($zipPath);
         } catch (\Throwable $e) {
@@ -157,6 +160,10 @@ final class PullOperation
                 $e->getMessage()
             ));
         }
+
+        // Erfolg: Die site-spezifischen rhbp_* Options wiederherstellen,
+        // die durch den Import ueberschrieben wurden.
+        $guard->restore($snapshot);
     }
 
     private function extractErrorMessage(SyncResponse $response): string

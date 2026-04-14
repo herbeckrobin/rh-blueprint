@@ -287,6 +287,10 @@ final class SyncController
             return new WP_Error('rhbp_safety_backup_failed', 'Safety-Backup fehlgeschlagen: ' . $e->getMessage(), ['status' => 500]);
         }
 
+        // Site-spezifische rhbp_* Options (inkl. rhbp_peers!) vor dem Import sichern.
+        $guard = new LocalOptionGuard();
+        $snapshot = $guard->snapshot();
+
         try {
             $this->importer->importFromFile($assembledZip);
         } catch (\Throwable $e) {
@@ -308,6 +312,9 @@ final class SyncController
                 ['status' => 500]
             );
         }
+
+        // Erfolg: lokale rhbp_* Options wiederherstellen.
+        $guard->restore($snapshot);
 
         $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
