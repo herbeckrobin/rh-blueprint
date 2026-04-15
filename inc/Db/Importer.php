@@ -23,6 +23,8 @@ final class Importer
      */
     public function importFromFile(string $zipPath): array
     {
+        global $wpdb;
+
         @set_time_limit(0);
         if (function_exists('wp_raise_memory_limit')) {
             wp_raise_memory_limit('admin');
@@ -50,11 +52,24 @@ final class Importer
         /** @var array<string, mixed> $manifest */
         $manifest = (array) json_decode((string) file_get_contents($manifestFile), true);
 
+        $sourcePrefix = isset($manifest['db_prefix']) ? (string) $manifest['db_prefix'] : '';
+        if ($sourcePrefix === '') {
+            $this->cleanupDir($extractDir);
+            throw new \RuntimeException('Backup-Manifest enthaelt keinen db_prefix. Aelteres Backup ohne Prefix-Info kann nicht sicher importiert werden.');
+        }
+
+        $targetPrefix = (string) $wpdb->prefix;
+
         try {
-            $this->importSqlFile($sqlFile);
+            $this->importSqlFile($sqlFile, $sourcePrefix, $targetPrefix);
+            $this->rewriteMetaKeys($sourcePrefix, $targetPrefix);
             $this->rewriteUrls($manifest);
         } finally {
             $this->cleanupDir($extractDir);
+        }
+
+        if ($sourcePrefix !== $targetPrefix) {
+            error_log(sprintf('[RHBP] DB-Import: Prefix umgeschrieben %s -> %s', $sourcePrefix, $targetPrefix));
         }
 
         return $manifest;
@@ -124,9 +139,22 @@ final class Importer
         $zip->close();
     }
 
-    private function importSqlFile(string $sqlFile): void
+    private function importSqlFile(string $sqlFile, string $sourcePrefix, string $targetPrefix): void
     {
         global $wpdb;
+
+        $needsRewrite = $sourcePrefix !== '' && $sourcePrefix !== $targetPrefix;
+        $rewritePatterns = [];
+        $rewriteReplacement = '';
+        if ($needsRewrite) {
+            $quoted = preg_quote($sourcePrefix, '/');
+            $rewritePatterns = [
+                '/^(DROP TABLE IF EXISTS )`' . $quoted . '/',
+                '/^(CREATE TABLE )`' . $quoted . '/',
+                '/^(INSERT INTO )`' . $quoted . '/',
+            ];
+            $rewriteReplacement = '$1`' . $targetPrefix;
+        }
 
         $handle = fopen($sqlFile, 'rb');
         if ($handle === false) {
@@ -145,6 +173,13 @@ final class Importer
                 continue;
             }
 
+            if ($needsRewrite) {
+                $rewritten = preg_replace($rewritePatterns, $rewriteReplacement, $chunk);
+                if (is_string($rewritten)) {
+                    $chunk = $rewritten;
+                }
+            }
+
             $buffer .= $chunk;
 
             if (str_ends_with(rtrim($chunk), ';')) {
@@ -158,6 +193,43 @@ final class Importer
         if (trim($buffer) !== '') {
             $wpdb->query($buffer);
         }
+    }
+
+    /**
+     * Schreibt User-Meta- und Options-Keys um die WordPress mit dem Tabellen-Prefix praefixt.
+     * Diese liegen als Daten in den Tabellen, werden also vom SQL-Rewrite nicht erfasst.
+     */
+    private function rewriteMetaKeys(string $sourcePrefix, string $targetPrefix): void
+    {
+        global $wpdb;
+
+        if ($sourcePrefix === '' || $sourcePrefix === $targetPrefix) {
+            return;
+        }
+
+        $usermetaKeys = [
+            'capabilities',
+            'user_level',
+            'user-settings',
+            'user-settings-time',
+            'dashboard_quick_press_last_post_id',
+            'session_tokens',
+        ];
+
+        $usermetaTable = $targetPrefix . 'usermeta';
+        foreach ($usermetaKeys as $key) {
+            $wpdb->update(
+                $usermetaTable,
+                ['meta_key' => $targetPrefix . $key],
+                ['meta_key' => $sourcePrefix . $key]
+            );
+        }
+
+        $wpdb->update(
+            $targetPrefix . 'options',
+            ['option_name' => $targetPrefix . 'user_roles'],
+            ['option_name' => $sourcePrefix . 'user_roles']
+        );
     }
 
     /**
