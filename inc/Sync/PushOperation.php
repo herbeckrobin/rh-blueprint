@@ -33,7 +33,16 @@ final class PushOperation
         $localZip = null;
 
         try {
-            $localZip = $this->exporter->createBackup(false, SyncDefaults::excludedTables());
+            /**
+             * Filter ob das Push-Backup die Mediathek (uploads/) enthalten soll.
+             * Default: false (nur DB). Aktivieren via:
+             *   add_filter('rh-blueprint/sync/include_uploads', '__return_true');
+             *
+             * @param bool $includeUploads
+             * @param Peer $peer
+             */
+            $includeUploads = (bool) apply_filters('rh-blueprint/sync/include_uploads', false, $peer);
+            $localZip = $this->exporter->createBackup($includeUploads, SyncDefaults::excludedTables());
             $totalSize = (int) filesize($localZip);
 
             $sessionId = $this->initSession($peer);

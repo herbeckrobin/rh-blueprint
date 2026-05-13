@@ -64,6 +64,12 @@ final class Importer
             $this->importSqlFile($sqlFile, $sourcePrefix, $targetPrefix);
             $this->rewriteMetaKeys($sourcePrefix, $targetPrefix);
             $this->rewriteUrls($manifest);
+
+            // Wenn das Backup uploads/ enthaelt (laut Manifest), extrahiere sie ins
+            // wp-content/uploads/ Verzeichnis. Existierende Files werden ueberschrieben.
+            if (!empty($manifest['includes_uploads'])) {
+                $this->extractUploadsFromZip($zipPath);
+            }
         } finally {
             $this->cleanupDir($extractDir);
         }
@@ -359,5 +365,98 @@ final class Importer
             }
         }
         @rmdir($dir);
+    }
+
+    /**
+     * Extrahiert das uploads/ Verzeichnis aus dem Backup-ZIP nach wp-content/uploads/.
+     * Existierende Files werden ueberschrieben. Path-Traversal ist via realpath-Prefix-Check
+     * verhindert (Zip-Slip-Schutz).
+     */
+    private function extractUploadsFromZip(string $zipPath): void
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            return;
+        }
+
+        $uploadDir = wp_upload_dir();
+        $uploadBase = isset($uploadDir['basedir']) ? (string) $uploadDir['basedir'] : '';
+        if ($uploadBase === '') {
+            return;
+        }
+        wp_mkdir_p($uploadBase);
+        $uploadBaseReal = realpath($uploadBase);
+        if ($uploadBaseReal === false) {
+            return;
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath) !== true) {
+            return;
+        }
+
+        $extracted = 0;
+        $skipped = 0;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat === false) {
+                continue;
+            }
+
+            $name = (string) $stat['name'];
+            if ($name === '' || str_ends_with($name, '/')) {
+                continue;
+            }
+
+            // Nur Eintraege unter uploads/ verarbeiten
+            $normalized = str_replace('\\', '/', $name);
+            if (!str_starts_with($normalized, 'uploads/')) {
+                continue;
+            }
+
+            // Zip-Slip
+            if (str_contains($normalized, '..')) {
+                $skipped++;
+                continue;
+            }
+
+            $relPath = substr($normalized, strlen('uploads/'));
+            if ($relPath === '') {
+                continue;
+            }
+
+            $targetPath = trailingslashit($uploadBaseReal) . $relPath;
+            $targetDir = dirname($targetPath);
+            wp_mkdir_p($targetDir);
+
+            // Prueft dass das Ziel WIRKLICH unter uploadBase liegt (gegen Symlink-Tricks)
+            $targetDirReal = realpath($targetDir);
+            if ($targetDirReal === false || !str_starts_with($targetDirReal, $uploadBaseReal)) {
+                $skipped++;
+                continue;
+            }
+
+            $stream = $zip->getStream($name);
+            if ($stream === false) {
+                $skipped++;
+                continue;
+            }
+
+            $out = fopen($targetPath, 'wb');
+            if ($out === false) {
+                fclose($stream);
+                $skipped++;
+                continue;
+            }
+
+            stream_copy_to_stream($stream, $out);
+            fclose($stream);
+            fclose($out);
+            $extracted++;
+        }
+
+        $zip->close();
+
+        error_log(sprintf('[RHBP] Uploads extrahiert: %d Files, %d uebersprungen', $extracted, $skipped));
     }
 }
