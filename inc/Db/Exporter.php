@@ -149,7 +149,13 @@ final class Exporter
             if ($value === null) {
                 $values[] = 'NULL';
             } else {
-                $values[] = "'" . $wpdb->_real_escape((string) $value) . "'";
+                // _real_escape() wickelt intern alle %-Zeichen in einen wpdb-Placeholder-Marker
+                // ({HASH}%{HASH}) damit wpdb::prepare() sie nicht als Format-Specifier behandelt.
+                // Fuer SQL-Dumps die NICHT durch prepare() gehen (sondern direkt per query() repliziert
+                // werden) muessen die Marker wieder entfernt werden, sonst landen sie persistent in der
+                // Ziel-DB. Beispiel: permalink_structure '/%postname%/' wuerde sonst zu '/{HASH}postname{HASH}/'.
+                $escaped = $wpdb->remove_placeholder_escape($wpdb->_real_escape((string) $value));
+                $values[] = "'" . $escaped . "'";
             }
         }
 
